@@ -2,10 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>WFH Slot Calculator</title>
+  <title>WFH/WFO Slot Calculator</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   <style>
+    html, body {
+      font-size: 14px; /* reduce all font sizes by 2 */
+    }
     body {
       font-family: 'Roboto', sans-serif;
       background: #f4f7fa;
@@ -23,13 +26,13 @@
     h2 {
       margin: 0 0 18px 0;
       font-weight: 700;
-      font-size: 1.55rem;
+      font-size: 1.15rem; /* was 1.55rem, now 1.15rem */
       color: #1a202c;
     }
     .desc {
       color: #555;
       margin-bottom: 20px;
-      font-size: 1.04rem;
+      font-size: 0.835rem; /* was 1.04rem */
     }
     .table-responsive {
       overflow-x: auto;
@@ -40,10 +43,10 @@
       width: 100%;
       background: #fff;
       margin-bottom: 12px;
-      font-size:1rem;
+      font-size:0.875rem; /* was 1rem */
     }
     th, td {
-      padding: 9px 7px;
+      padding: 6px 5px;
       border-bottom: 1px solid #e1e7ee;
       text-align: center;
     }
@@ -61,11 +64,11 @@
     }
     tr:last-child td { border-bottom: none;}
     input[type="text"] {
-      width: 78px;
-      padding: 6px 5px;
+      width: 72px;
+      padding: 5px 3px;
       border: 1px solid #bccbf3;
       border-radius: 5px;
-      font-size: 1rem;
+      font-size: 0.875rem;
       background: #f9faff;
       box-sizing: border-box;
       text-align: center;
@@ -76,14 +79,15 @@
     }
     th { font-weight: 600;}
     .actions {
-      margin: 12px 0 18px;
+      margin: 10px 0 14px;
       display: flex;
       flex-wrap: wrap;
-      gap: 14px;
+      gap: 12px;
+      font-size:0.85rem;
     }
     .btn {
-      font-size: 1rem;
-      padding: 7px 18px;
+      font-size: 0.9rem;
+      padding: 5px 14px;
       border: none;
       border-radius: 5px;
       background: #396bdb;
@@ -101,21 +105,22 @@
     }
     @media (max-width: 1000px) {
       .container { padding: 10px 1px;}
-      th, td { font-size: 0.93rem;}
-      input[type="text"]{width:62px;}
+      th, td { font-size: 0.75rem;}
+      input[type="text"]{width:54px;}
+      .btn { font-size: 0.75rem;}
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>Work From Home Slot Calculator v1.5</h2>
+    <h2>Work From Home Slot Calculator v1.7</h2>
     <div class="desc">
       Paste your <b>WFO data (Date, WFO In, WFO Out)</b> from Excel or Sheets.<br>
       The table will <b>auto-calculate WFH slots</b> as per rules:<br>
       <ul>
         <li>Work starts at <b>08:00</b></li>
-        <li>Total working hours in a day: <b>9:16</b> (including WFO &amp; WFH)</li>
-        <li>Commute: <b>30 min</b> to and from office</li>
+        <li>Total working hours: <b>9:16</b> (including WFO &amp; WFH)</li>
+        <li>Commute: <b>30 min</b> before and after office</li>
         <li>All times in 24hr format <b>(hh:mm)</b></li>
         <li>Time entry: Enter 3 or 4 digits (e.g. <b>945</b> or <b>1045</b>), auto-formats to <b>09:45</b> or <b>10:45</b> on leaving the field.</li>
       </ul>
@@ -128,7 +133,7 @@
     <div class="table-responsive">
       <table id="calc-table">
         <colgroup>
-          <col span="1"><col span="2">
+          <col span="1"><col span="2"><col span="1">
           <col class="section-div"><!-- WFO/S1 divider -->
           <col span="3">
           <col class="section-div"><!-- S1/S2 divider -->
@@ -142,6 +147,7 @@
             <th class="section-wfo">Date</th>
             <th class="section-wfo">WFO In</th>
             <th class="section-wfo">WFO Out</th>
+            <th class="section-wfo">WFO Duration</th>
             <th class="section-div"></th>
             <th class="section-slot1">Slot 1 - WFH In</th>
             <th class="section-slot1">Slot 1 - WFH Out</th>
@@ -161,7 +167,7 @@
     </div>
   </div>
 <script>
-// --- UTILITY TIME FUNCTIONS ---
+// --- TIME UTILS ---
 
 function parseTimeHHMM(str) {
   if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(str.trim())) return null;
@@ -182,7 +188,9 @@ function validTime(str) { return parseTimeHHMM(str) != null; }
 const START_OF_DAY = 8*60;
 const DAY_WORK_MINUTES = 9*60+16;
 const COMMUTE = 30;
+
 function emptyRow(){ return {date: "",wfoIn: "",wfoOut: ""}; }
+
 function calcForRow(row) {
   let out = { wfoDuration:"", slot1In:"", slot1Out:"", slot1Duration:"",
     slot2In:"", slot2Out:"", slot2Duration:"", totalHours:"" };
@@ -226,12 +234,10 @@ function calcForRow(row) {
 }
 let rows = [];
 function timeInputFilter(e) {
-  // Allow only numbers (do not enforce length)
   let val = e.target.value.replace(/[^0-9]/g,'');
   e.target.value = val;
 }
 function timeInputBlur(e, idx, field) {
-  // On blur, format to hh:mm if 3-4 numbers; zero-pad if 3
   let val = e.target.value.replace(/[^0-9]/g,'');
   let formatted = '';
   if (val.length === 3) val = '0' + val;
@@ -240,7 +246,6 @@ function timeInputBlur(e, idx, field) {
     if (Number(h)<=23 && Number(m)<=59)
       formatted = h + ':' + m;
   }
-  // Show formatted value in input & store in data (or blank if invalid)
   e.target.value = formatted;
   updateCell(idx, field, formatted);
 }
@@ -270,6 +275,7 @@ function renderTable() {
         onblur="timeInputBlur(event,${idx},'wfoOut')"
         placeholder="hhmm">
     </td>
+    <td>${c.wfoDuration}</td>
     <td class="section-div"></td>
     <td>${c.slot1In}</td>
     <td>${c.slot1Out}</td>
@@ -281,7 +287,7 @@ function renderTable() {
     <td class="section-div"></td>
     <td><b>${c.totalHours}</b></td>
     <td>
-      <button class="btn secondary" style="padding:2px 8px;font-size:1rem" onclick="removeRow(${idx})">✕</button>
+      <button class="btn secondary" style="padding:2px 8px;font-size:0.85rem" onclick="removeRow(${idx})">✕</button>
     </td>
     </tr>`;
   });
@@ -301,7 +307,6 @@ async function pasteFromClipboard(){
       let [date, wfoIn, wfoOut] = cells;
       wfoIn  = wfoIn.replace(/[^0-9]/g,'');
       wfoOut = wfoOut.replace(/[^0-9]/g,'');
-      // format imported times
       let formatTime = v => {
         if (v.length === 3) v = '0'+v;
         if (v.length === 4) {
