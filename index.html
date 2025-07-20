@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WFH/WFO Slot Calculator</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #f4f7fa;
+      margin: 0;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1080px;
+      margin: 40px auto;
+      background: #fff;
+      padding: 30px 24px;
+      border-radius: 14px;
+      box-shadow: 0 4px 32px rgba(60,60,60,0.09);
+    }
+    h2 {
+      margin: 0 0 18px 0;
+      font-weight: 700;
+      font-size: 1.55rem;
+      color: #1a202c;
+    }
+    .desc {
+      color: #555;
+      margin-bottom: 20px;
+      font-size: 1.04rem;
+    }
+    .table-responsive {
+      overflow-x: auto;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: #fff;
+      margin-bottom: 12px;
+    }
+    th, td {
+      padding: 9px 8px;
+      border-bottom: 1px solid #e1e7ee;
+      text-align: center;
+      font-size: 1.01rem;
+    }
+    th {
+      background: #eaf2fd;
+      color: #26476d;
+      font-weight: 600;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    input[type="text"] {
+      width: 84px;
+      padding: 6px 5px;
+      border: 1px solid #bccbf3;
+      border-radius: 5px;
+      font-size: 1rem;
+      background: #f9faff;
+      box-sizing: border-box;
+    }
+    input[type="text"]:focus {
+      outline: 2px solid #396bdb;
+    }
+    .actions {
+      margin: 12px 0 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    .btn {
+      font-size: 1rem;
+      padding: 7px 18px;
+      border: none;
+      border-radius: 5px;
+      background: #396bdb;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:active {
+      background: #274085;
+    }
+    .btn.secondary {
+      background: #a9adc1;
+      color: #fff;
+    }
+    @media (max-width: 1000px) {
+      .container {
+        padding: 10px 1px;
+      }
+      th, td { font-size: 0.94rem; }
+      input[type="text"] { width: 72px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Work From Home Slot Calculator</h2>
+    <div class="desc">
+      Paste your <b>WFO data (Date, WFO In, WFO Out)</b> from Excel or Sheets.<br>
+      The table will <b>auto-calculate WFH slots</b> as per rules:<br>
+      <ul>
+        <li>Work starts at <b>08:00</b></li>
+        <li>Min. total working hours: <b>9:16</b> (including WFO & WFH)<br>
+        <li>Commute: <b>30 min</b> before and after office</li>
+        <li>All times in 24hr format <b>(hh:mm)</b></li>
+      </ul>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="addRow()">Add Row</button>
+      <button class="btn secondary" onclick="clearTable()">Clear All</button>
+      <button class="btn secondary" onclick="pasteFromClipboard()">Paste (Date, WFO In, WFO Out)</button>
+    </div>
+    <div class="table-responsive">
+      <table id="calc-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>WFO In</th>
+            <th>WFO Out</th>
+            <th>WFO Duration</th>
+            <th>Slot 1 - WFH In</th>
+            <th>Slot 1 - WFH Out</th>
+            <th>Slot 1 - WFH Duration</th>
+            <th>Slot 2 - WFH In</th>
+            <th>Slot 2 - WFH Out</th>
+            <th>Slot 2 - WFH Duration</th>
+            <th>Total Hours Worked</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <!-- Rows will populate here -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+// --- UTILITY TIME FUNCTIONS ---
+
+function parseTimeHHMM(str) {
+  // "09:30" => minutes since 00:00
+  if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(str.trim())) return null;
+  let [h, m] = str.split(":").map(Number);
+  return h*60+m;
+}
+function minsToHHMM(mins) {
+  let h = Math.floor(mins/60);
+  let m = mins%60;
+  return (h<10?'0':'')+h + ":" + (m<10?'0':'')+m;
+}
+function durationHHMM(mins) {
+  if (mins == null) return "";
+  let neg = mins<0;
+  mins = Math.abs(mins);
+  let h = Math.floor(mins/60);
+  let m = mins%60;
+  return (neg?'-':'') + (h<10?'0':'')+h + ":" + (m<10?'0':'')+m;
+}
+function validTime(str) {
+  return parseTimeHHMM(str) != null;
+}
+// --------------
+
+// CONSTS
+const START_OF_DAY = 8*60; //08:00 in mins
+const DAY_WORK_MINUTES = 9*60+16; // 9hr 16min
+const COMMUTE = 30; //each way in mins
+
+// Table Row Model
+function emptyRow(){ return {
+  date: "",
+  wfoIn: "",
+  wfoOut: ""
+} }
+// --- CORE LOGIC CALCULATION ---
+function calcForRow(row) {
+  let out = {
+    wfoDuration: "",
+    slot1In: "",
+    slot1Out: "",
+    slot1Duration: "",
+    slot2In: "",
+    slot2Out: "",
+    slot2Duration: "",
+    totalHours: ""
+  };
+  let wfoIn = parseTimeHHMM(row.wfoIn);
+  let wfoOut = parseTimeHHMM(row.wfoOut);
+  let workStart = START_OF_DAY;
+
+  // If incomplete, return empty fields
+  if (!validTime(row.wfoIn) || !validTime(row.wfoOut) || wfoOut<=wfoIn)
+    return out;
+
+  let wfoDuration = wfoOut - wfoIn;
+  out.wfoDuration = durationHHMM(wfoDuration);
+
+  // Commute
+  let leaveForOffice = wfoIn - COMMUTE; //Leave home
+  let reachHome = wfoOut + COMMUTE; //Back home
+
+  // Slot 1: Before office
+  let slot1In = workStart;
+  let slot1Out = wfoIn - COMMUTE;
+  let slot1Duration = slot1Out > slot1In ? slot1Out - slot1In : 0;
+
+  // Total hours so far
+  let hoursWorkedSoFar = slot1Duration + wfoDuration;
+
+  // If slot1+WFO covers day, slot2 not needed.
+  if (hoursWorkedSoFar >= DAY_WORK_MINUTES) {
+    if (slot1Duration >= DAY_WORK_MINUTES) {
+      slot1Duration = DAY_WORK_MINUTES;
+      slot1Out = slot1In + DAY_WORK_MINUTES;
+      out.slot1In = minsToHHMM(slot1In);
+      out.slot1Out = minsToHHMM(slot1Out);
+      out.slot1Duration = durationHHMM(slot1Duration);
+      // No slot 2
+      out.slot2In = out.slot2Out = out.slot2Duration = "";
+      out.totalHours = durationHHMM(slot1Duration);
+      return out;
+    } else {
+      // Use up to covering total needed
+      out.slot1In = minsToHHMM(slot1In);
+      out.slot1Out = minsToHHMM(slot1Out);
+      out.slot1Duration = durationHHMM(slot1Duration);
+      // No slot 2
+      out.slot2In = out.slot2Out = out.slot2Duration = "";
+      out.totalHours = durationHHMM(wfoDuration+slot1Duration);
+      return out;
+    }
+  }
+
+  // Slot 2 (after office)
+  let slot2Needed = DAY_WORK_MINUTES - hoursWorkedSoFar;
+  let slot2In = wfoOut + COMMUTE;
+  let slot2Out = slot2In + slot2Needed;
+
+  out.slot1In = minsToHHMM(slot1In);
+  out.slot1Out = minsToHHMM(slot1Out);
+  out.slot1Duration = durationHHMM(slot1Duration);
+
+  // Only calculate slot 2 if slot2Needed>0
+  if (slot2Needed > 0) {
+    out.slot2In = minsToHHMM(slot2In);
+    out.slot2Out = minsToHHMM(slot2Out);
+    out.slot2Duration = durationHHMM(slot2Needed);
+  } else {
+    out.slot2In = out.slot2Out = out.slot2Duration = "";
+  }
+  out.totalHours = durationHHMM(
+    wfoDuration + slot1Duration + (slot2Needed>0 ? slot2Needed : 0)
+  );
+  return out;
+}
+
+// -- MAIN TABLE STATE AND RENDERING --
+let rows = [];
+
+function renderTable() {
+  let tb = document.getElementById("table-body");
+  tb.innerHTML = "";
+  rows.forEach((row, idx) => {
+    let c = calcForRow(row);
+    tb.innerHTML += `<tr>
+      <td><input type="text" value="${row.date}" onchange="updateCell(${idx},'date',this.value)" style="width:105px"></td>
+      <td><input type="text" value="${row.wfoIn}" onchange="updateCell(${idx},'wfoIn',this.value)" placeholder="hh:mm"></td>
+      <td><input type="text" value="${row.wfoOut}" onchange="updateCell(${idx},'wfoOut',this.value)" placeholder="hh:mm"></td>
+      <td>${c.wfoDuration}</td>
+      <td>${c.slot1In}</td>
+      <td>${c.slot1Out}</td>
+      <td>${c.slot1Duration}</td>
+      <td>${c.slot2In}</td>
+      <td>${c.slot2Out}</td>
+      <td>${c.slot2Duration}</td>
+      <td><b>${c.totalHours}</b></td>
+      <td>
+        <button class="btn secondary" style="padding:2px 8px;font-size:1rem" onclick="removeRow(${idx})">✕</button>
+      </td>
+    </tr>`;
+  });
+}
+
+function addRow(){
+  rows.push(emptyRow());
+  renderTable();
+}
+function removeRow(i){
+  rows.splice(i,1);
+  renderTable();
+}
+function updateCell(i, col, val){
+  rows[i][col] = val.trim();
+  renderTable();
+}
+function clearTable(){
+  if(confirm("Clear all rows?")) {
+    rows = [];
+    renderTable();
+  }
+}
+
+// ---- PASTE FROM CLIPBOARD / EXCEL ----
+async function pasteFromClipboard(){
+  let txt = await navigator.clipboard.readText();
+  // Split into lines
+  let lines = txt.split(/\r?\n/).filter(line=>line.trim());
+  let newRows = [];
+  for (let l=0; l<lines.length; ++l){
+    // Try tab or comma separated, then whitespace.
+    let cells = lines[l].split(/\t|,|;/).map(x=>x.trim());
+    // If less than 3 cols, try whitespace split
+    if (cells.length<3)
+      cells = lines[l].split(/\s+/).map(x=>x.trim());
+    // We only take the first 3 columns: Date, WFO In, WFO Out
+    if (cells.length>=3) {
+      let [date, wfoIn, wfoOut] = cells;
+      newRows.push({date, wfoIn, wfoOut});
+    }
+  }
+  if (newRows.length) {
+    rows = rows.concat(newRows);
+    renderTable();
+  } else {
+    alert("No valid data to paste!");
+  }
+}
+
+// INITIAL RENDER
+addRow();
+
+</script>
+</body>
+</html>
