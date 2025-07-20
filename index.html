@@ -35,37 +35,49 @@
       overflow-x: auto;
     }
     table {
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
       width: 100%;
       background: #fff;
       margin-bottom: 12px;
+      font-size:1rem;
     }
     th, td {
-      padding: 9px 8px;
+      padding: 9px 7px;
       border-bottom: 1px solid #e1e7ee;
       text-align: center;
-      font-size: 1.01rem;
     }
-    th {
-      background: #eaf2fd;
-      color: #26476d;
-      font-weight: 600;
+    /* Header color sections */
+    th.section-wfo     { background: #E2E6FA; color: #25356B; }
+    th.section-slot1   { background: #D0F0D6; color: #195B3E; }
+    th.section-slot2   { background: #FFEAC9; color: #A76107; }
+    th.section-total   { background: #FFE0E0; color: #9A2535;}
+    th.section-delete  { background: #fafafa;}
+    /* Column dividers */
+    td, th { border-right: 1.5px solid #fff; }
+    td.section-div, th.section-div {
+      border-right: 2.5px solid #a3adc7 !important;
+      background: #f3f6fa;
+      padding-left:0; padding-right:0;
+      width: 3px;
     }
-    tr:last-child td {
-      border-bottom: none;
-    }
+    tr:last-child td { border-bottom: none;}
+    /* Narrow input width */
     input[type="text"] {
-      width: 84px;
+      width: 78px;
       padding: 6px 5px;
       border: 1px solid #bccbf3;
       border-radius: 5px;
       font-size: 1rem;
       background: #f9faff;
       box-sizing: border-box;
+      text-align: center;
     }
     input[type="text"]:focus {
       outline: 2px solid #396bdb;
+      background: #ddeafd;
     }
+    th { font-weight: 600;}
     .actions {
       margin: 12px 0 18px;
       display: flex;
@@ -91,11 +103,9 @@
       color: #fff;
     }
     @media (max-width: 1000px) {
-      .container {
-        padding: 10px 1px;
-      }
-      th, td { font-size: 0.94rem; }
-      input[type="text"] { width: 72px; }
+      .container { padding: 10px 1px;}
+      th, td { font-size: 0.93rem;}
+      input[type="text"]{width:62px;}
     }
   </style>
 </head>
@@ -119,32 +129,40 @@
     </div>
     <div class="table-responsive">
       <table id="calc-table">
+        <colgroup>
+          <col span="1"><col span="2">
+          <col class="section-div"><!-- WFO/S1 divider -->
+          <col span="3">
+          <col class="section-div"><!-- S1/S2 divider -->
+          <col span="3">
+          <col class="section-div"><!-- S2/Total divider -->
+          <col span="1">
+          <col span="1">
+        </colgroup>
         <thead>
           <tr>
-            <th>Date</th>
-            <th>WFO In</th>
-            <th>WFO Out</th>
-            <th>WFO Duration</th>
-            <th>Slot 1 - WFH In</th>
-            <th>Slot 1 - WFH Out</th>
-            <th>Slot 1 - WFH Duration</th>
-            <th>Slot 2 - WFH In</th>
-            <th>Slot 2 - WFH Out</th>
-            <th>Slot 2 - WFH Duration</th>
-            <th>Total Hours Worked</th>
-            <th></th>
+            <th class="section-wfo">Date</th>
+            <th class="section-wfo">WFO In</th>
+            <th class="section-wfo">WFO Out</th>
+            <th class="section-div"></th>
+            <th class="section-slot1">Slot 1 - WFH In</th>
+            <th class="section-slot1">Slot 1 - WFH Out</th>
+            <th class="section-slot1">Slot 1 Duration</th>
+            <th class="section-div"></th>
+            <th class="section-slot2">Slot 2 - WFH In</th>
+            <th class="section-slot2">Slot 2 - WFH Out</th>
+            <th class="section-slot2">Slot 2 Duration</th>
+            <th class="section-div"></th>
+            <th class="section-total">Total Hours</th>
+            <th class="section-delete"></th>
           </tr>
         </thead>
         <tbody id="table-body">
-          <!-- Rows will populate here -->
         </tbody>
       </table>
     </div>
   </div>
-
 <script>
-// --- UTILITY TIME FUNCTIONS ---
-
 function parseTimeHHMM(str) {
   // "09:30" => minutes since 00:00
   if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(str.trim())) return null;
@@ -164,23 +182,11 @@ function durationHHMM(mins) {
   let m = mins%60;
   return (neg?'-':'') + (h<10?'0':'')+h + ":" + (m<10?'0':'')+m;
 }
-function validTime(str) {
-  return parseTimeHHMM(str) != null;
-}
-// --------------
-
-// CONSTS
-const START_OF_DAY = 8*60; //08:00 in mins
-const DAY_WORK_MINUTES = 9*60+16; // 9hr 16min
-const COMMUTE = 30; //each way in mins
-
-// Table Row Model
-function emptyRow(){ return {
-  date: "",
-  wfoIn: "",
-  wfoOut: ""
-} }
-// --- CORE LOGIC CALCULATION ---
+function validTime(str) { return parseTimeHHMM(str) != null; }
+const START_OF_DAY = 8*60;
+const DAY_WORK_MINUTES = 9*60+16;
+const COMMUTE = 30;
+function emptyRow(){ return {date: "",wfoIn: "",wfoOut: ""}; }
 function calcForRow(row) {
   let out = {
     wfoDuration: "",
@@ -195,11 +201,7 @@ function calcForRow(row) {
   let wfoIn = parseTimeHHMM(row.wfoIn);
   let wfoOut = parseTimeHHMM(row.wfoOut);
   let workStart = START_OF_DAY;
-
-  // If incomplete, return empty fields
-  if (!validTime(row.wfoIn) || !validTime(row.wfoOut) || wfoOut<=wfoIn)
-    return out;
-
+  if (!validTime(row.wfoIn) || !validTime(row.wfoOut) || wfoOut<=wfoIn) return out;
   let wfoDuration = wfoOut - wfoIn;
   out.wfoDuration = durationHHMM(wfoDuration);
 
@@ -223,23 +225,18 @@ function calcForRow(row) {
       out.slot1In = minsToHHMM(slot1In);
       out.slot1Out = minsToHHMM(slot1Out);
       out.slot1Duration = durationHHMM(slot1Duration);
-      // No slot 2
       out.slot2In = out.slot2Out = out.slot2Duration = "";
       out.totalHours = durationHHMM(slot1Duration);
       return out;
     } else {
-      // Use up to covering total needed
       out.slot1In = minsToHHMM(slot1In);
       out.slot1Out = minsToHHMM(slot1Out);
       out.slot1Duration = durationHHMM(slot1Duration);
-      // No slot 2
       out.slot2In = out.slot2Out = out.slot2Duration = "";
       out.totalHours = durationHHMM(wfoDuration+slot1Duration);
       return out;
     }
   }
-
-  // Slot 2 (after office)
   let slot2Needed = DAY_WORK_MINUTES - hoursWorkedSoFar;
   let slot2In = wfoOut + COMMUTE;
   let slot2Out = slot2In + slot2Needed;
@@ -248,7 +245,6 @@ function calcForRow(row) {
   out.slot1Out = minsToHHMM(slot1Out);
   out.slot1Duration = durationHHMM(slot1Duration);
 
-  // Only calculate slot 2 if slot2Needed>0
   if (slot2Needed > 0) {
     out.slot2In = minsToHHMM(slot2In);
     out.slot2Out = minsToHHMM(slot2Out);
@@ -261,26 +257,76 @@ function calcForRow(row) {
   );
   return out;
 }
-
-// -- MAIN TABLE STATE AND RENDERING --
 let rows = [];
-
+function formatHHMM(val) {
+  let s = val.replace(/[^0-9]/g,'');
+  if (s.length>4) s = s.slice(0,4);
+  if (s.length>=3) return s.slice(0,2) + ':' + s.slice(2);
+  if (s.length>=1 && s.length<=2) return s;
+  return '';
+}
+function handleTimeInput(event, idx, field) {
+  let val = event.target.value;
+  if (event.inputType === "deleteContentBackward" && val.endsWith(':')) {
+    // allow user to delete ':'
+    updateCell(idx, field, val.slice(0,-1));
+    return;
+  }
+  let formatted = formatHHMM(val);
+  if (formatted !== val) {
+    event.target.value = formatted;
+  }
+  updateCell(idx, field, formatted);
+}
+function handleTimeBlur(event, idx, field) {
+  // On leaving the field, auto-pad if possible
+  let val = event.target.value.replace(/[^0-9]/g,'');
+  if (val.length===3) val = '0'+val; // 945 -> 0945
+  if (val.length===4) {
+    let h = val.slice(0,2), m = val.slice(2);
+    if (Number(h)<=23 && Number(m)<=59)
+      updateCell(idx, field, h+':'+m);
+    else
+      updateCell(idx, field, '');
+  }
+}
 function renderTable() {
   let tb = document.getElementById("table-body");
   tb.innerHTML = "";
   rows.forEach((row, idx) => {
     let c = calcForRow(row);
+
     tb.innerHTML += `<tr>
-      <td><input type="text" value="${row.date}" onchange="updateCell(${idx},'date',this.value)" style="width:105px"></td>
-      <td><input type="text" value="${row.wfoIn}" onchange="updateCell(${idx},'wfoIn',this.value)" placeholder="hh:mm"></td>
-      <td><input type="text" value="${row.wfoOut}" onchange="updateCell(${idx},'wfoOut',this.value)" placeholder="hh:mm"></td>
-      <td>${c.wfoDuration}</td>
+      <td><input type="text" value="${row.date}" onchange="updateCell(${idx},'date',this.value)" style="width:102px"></td>
+      <td>
+        <input type="text"
+          maxlength="5"
+          value="${row.wfoIn}"
+          inputmode="numeric"
+          pattern="^\\d{1,2}:?\\d{0,2}$"
+          oninput="handleTimeInput(event,${idx},'wfoIn')"
+          onblur="handleTimeBlur(event,${idx},'wfoIn')"
+          placeholder="hh:mm">
+      </td>
+      <td>
+        <input type="text"
+          maxlength="5"
+          value="${row.wfoOut}"
+          inputmode="numeric"
+          pattern="^\\d{1,2}:?\\d{0,2}$"
+          oninput="handleTimeInput(event,${idx},'wfoOut')"
+          onblur="handleTimeBlur(event,${idx},'wfoOut')"
+          placeholder="hh:mm">
+      </td>
+      <td class="section-div"></td>
       <td>${c.slot1In}</td>
       <td>${c.slot1Out}</td>
       <td>${c.slot1Duration}</td>
+      <td class="section-div"></td>
       <td>${c.slot2In}</td>
       <td>${c.slot2Out}</td>
       <td>${c.slot2Duration}</td>
+      <td class="section-div"></td>
       <td><b>${c.totalHours}</b></td>
       <td>
         <button class="btn secondary" style="padding:2px 8px;font-size:1rem" onclick="removeRow(${idx})">✕</button>
@@ -288,41 +334,22 @@ function renderTable() {
     </tr>`;
   });
 }
-
-function addRow(){
-  rows.push(emptyRow());
-  renderTable();
-}
-function removeRow(i){
-  rows.splice(i,1);
-  renderTable();
-}
-function updateCell(i, col, val){
-  rows[i][col] = val.trim();
-  renderTable();
-}
-function clearTable(){
-  if(confirm("Clear all rows?")) {
-    rows = [];
-    renderTable();
-  }
-}
-
-// ---- PASTE FROM CLIPBOARD / EXCEL ----
+function addRow(){ rows.push(emptyRow()); renderTable(); }
+function removeRow(i){ rows.splice(i,1); renderTable(); }
+function updateCell(i, col, val){ rows[i][col] = val.trim(); renderTable(); }
+function clearTable(){ if(confirm("Clear all rows?")) { rows = []; renderTable(); } }
 async function pasteFromClipboard(){
   let txt = await navigator.clipboard.readText();
-  // Split into lines
   let lines = txt.split(/\r?\n/).filter(line=>line.trim());
   let newRows = [];
   for (let l=0; l<lines.length; ++l){
-    // Try tab or comma separated, then whitespace.
     let cells = lines[l].split(/\t|,|;/).map(x=>x.trim());
-    // If less than 3 cols, try whitespace split
     if (cells.length<3)
       cells = lines[l].split(/\s+/).map(x=>x.trim());
-    // We only take the first 3 columns: Date, WFO In, WFO Out
     if (cells.length>=3) {
       let [date, wfoIn, wfoOut] = cells;
+      if(/^\d{3,4}$/.test(wfoIn)) wfoIn = formatHHMM(wfoIn);
+      if(/^\d{3,4}$/.test(wfoOut)) wfoOut = formatHHMM(wfoOut);
       newRows.push({date, wfoIn, wfoOut});
     }
   }
@@ -333,10 +360,15 @@ async function pasteFromClipboard(){
     alert("No valid data to paste!");
   }
 }
-
-// INITIAL RENDER
 addRow();
-
+// Make handlers available globally
+window.handleTimeInput = handleTimeInput;
+window.handleTimeBlur = handleTimeBlur;
+window.addRow = addRow;
+window.removeRow = removeRow;
+window.updateCell = updateCell;
+window.clearTable = clearTable;
+window.pasteFromClipboard = pasteFromClipboard;
 </script>
 </body>
 </html>
