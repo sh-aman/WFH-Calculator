@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>WFH/WFO Slot Calculator</title>
+  <title>WFH/WFO Slot Calculator v1.4</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   <style>
@@ -111,7 +111,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>Work From Home Slot Calculator</h2>
+    <h2>Work From Home Slot Calculator v1.4</h2>
     <div class="desc">
       Paste your <b>WFO data (Date, WFO In, WFO Out)</b> from Excel or Sheets.<br>
       The table will <b>auto-calculate WFH slots</b> as per rules:<br>
@@ -120,7 +120,7 @@
         <li>Min. total working hours: <b>9:16</b> (including WFO &amp; WFH)</li>
         <li>Commute: <b>30 min</b> before and after office</li>
         <li>All times in 24hr format <b>(hh:mm)</b></li>
-        <li>For time, type 4 digits (e.g. <b>1045</b>), or 3 digits (e.g. <b>945</b> → auto pads to 09:45 on leaving the field)</li>
+        <li>Time entry: Enter 3 or 4 digits (e.g. <b>945</b> or <b>1045</b>), auto-formats to <b>09:45</b> or <b>10:45</b> on leaving the field.</li>
       </ul>
     </div>
     <div class="actions">
@@ -229,8 +229,8 @@ function calcForRow(row) {
 }
 let rows = [];
 function timeInputFilter(e) {
-  // Allow only numbers, cut at 4 digits
-  let val = e.target.value.replace(/[^0-9]/g,'').slice(0,4);
+  // Allow only numbers (do not enforce length now)
+  let val = e.target.value.replace(/[^0-9]/g,'');
   e.target.value = val;
 }
 function timeInputBlur(e, idx, field) {
@@ -256,7 +256,6 @@ function renderTable() {
       <td><input type="text" value="${row.date}" onchange="updateCell(${idx},'date',this.value)" style="width:102px"></td>
     <td>
       <input type="text"
-        maxlength="4"
         value="${row.wfoIn.replace(/[^0-9]/g,'')}"
         inputmode="numeric"
         pattern="\\d{3,4}"
@@ -267,7 +266,6 @@ function renderTable() {
     </td>
     <td>
       <input type="text"
-        maxlength="4"
         value="${row.wfoOut.replace(/[^0-9]/g,'')}"
         inputmode="numeric"
         pattern="\\d{3,4}"
@@ -305,8 +303,8 @@ async function pasteFromClipboard(){
     if (cells.length<3) cells = lines[l].split(/\s+/).map(x=>x.trim());
     if (cells.length>=3) {
       let [date, wfoIn, wfoOut] = cells;
-      wfoIn  = wfoIn.replace(/[^0-9]/g,'').slice(0,4);
-      wfoOut = wfoOut.replace(/[^0-9]/g,'').slice(0,4);
+      wfoIn  = wfoIn.replace(/[^0-9]/g,'');
+      wfoOut = wfoOut.replace(/[^0-9]/g,'');
       newRows.push({date, wfoIn, wfoOut});
     }
   }
